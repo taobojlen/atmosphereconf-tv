@@ -485,7 +485,7 @@
 
     try {
       const text = await (await fetch('/denied-vods.json')).text();
-      const denied = JSON.parse(text.replace(/\/\/.*$/gm, ''));
+      const denied = JSON.parse(text);
       const denySet = new Set(denied);
       const before = all.length;
       all = all.filter(r => !denySet.has(r.uri));
@@ -704,16 +704,15 @@
         const blob = new Blob([audioInit, audioData], { type: 'video/mp4' });
         audioEl.src = URL.createObjectURL(blob);
 
-        await new Promise((resolve, reject) => {
-          const done = () => { audioEl.removeEventListener('canplay', done); audioEl.removeEventListener('error', fail); resolve(); };
-          const fail = () => { audioEl.removeEventListener('canplay', done); audioEl.removeEventListener('error', fail); reject(audioEl.error); };
-          audioEl.addEventListener('canplay', done, { once: true });
-          audioEl.addEventListener('error', fail, { once: true });
-          setTimeout(resolve, 3000);
+        // Wait for the browser to be ready enough to seek
+        await new Promise(r => {
+          if (audioEl.readyState >= 1) { r(); return; }
+          audioEl.addEventListener('loadedmetadata', r, { once: true });
+          audioEl.addEventListener('canplay', r, { once: true });
+          setTimeout(r, 1000);
         });
         if (stale()) return;
 
-        // Seek audio to match video position, wait for seek, then play
         audioEl.currentTime = video.currentTime;
         console.log('[TV] Audio seeking to', video.currentTime.toFixed(1) + 's');
 
