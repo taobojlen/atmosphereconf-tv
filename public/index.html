@@ -336,6 +336,15 @@
   }
   .muted-indicator.visible { opacity: 1; }
   .muted-indicator.fade-out { opacity: 0; transition: opacity 1.5s; }
+
+  .source-link {
+    font-family: 'VT323', monospace;
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.25);
+    text-decoration: none;
+    margin-top: 8px;
+  }
+  .source-link:hover { color: rgba(255, 255, 255, 0.5); }
 </style>
 </head>
 <body>
@@ -380,6 +389,7 @@
     <div class="tv-leg"></div>
     <div class="tv-leg"></div>
   </div>
+  <a class="source-link" href="https://github.com/taobojlen/atmosphereconf-tv" target="_blank" rel="noopener">source code</a>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1"></script>
