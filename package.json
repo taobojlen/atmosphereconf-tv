@@ -1,0 +1,8 @@
+{
+  "name": "atmosphereconf-vod-crt",
+  "private": true,
+  "scripts": {
+    "dev": "npx wrangler pages dev public",
+    "deploy": "npx wrangler deploy"
+  }
+}

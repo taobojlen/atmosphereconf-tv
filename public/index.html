@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ATmosphereConf TV</title>
+<meta name="description" content="Channel-surf through ATmosphereConf 2026 talks like it's 1987.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📺</text></svg>">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=VT323&family=Press+Start+2P&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --tv-body: #3a3024;
+    --tv-body-light: #5a4d3a;
+    --tv-body-dark: #1e1a14;
+    --tv-bezel: #1a1610;
+    --screen-glow: rgba(100, 200, 100, 0.08);
+    --phosphor: #a0d8a0;
+  }
+
+  html, body {
+    width: 100%; height: 100%;
+    overflow: hidden;
+    background: #0a0a0e;
+    font-family: 'VT323', monospace;
+  }
+
+  body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background:
+      radial-gradient(ellipse at 50% 80%, #1a1820 0%, #0a0a0e 70%),
+      #0a0a0e;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+      repeating-linear-gradient(
+        90deg,
+        transparent 0px, transparent 48px,
+        rgba(255,255,255,0.015) 48px, rgba(255,255,255,0.015) 50px
+      );
+    pointer-events: none;
+  }
+
+  .tv-wrapper {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  .antenna {
+    position: relative;
+    width: 200px;
+    height: 80px;
+    margin-bottom: -8px;
+    z-index: 1;
+  }
+  .antenna::before, .antenna::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    width: 4px;
+    height: 80px;
+    background: linear-gradient(to top, #888, #ccc);
+    border-radius: 2px;
+  }
+  .antenna::before { left: 50px; transform: rotate(-25deg); transform-origin: bottom center; }
+  .antenna::after { right: 50px; transform: rotate(25deg); transform-origin: bottom center; }
+
+  .tv {
+    position: relative;
+    width: min(92vw, 960px);
+    background: linear-gradient(160deg, var(--tv-body-light) 0%, var(--tv-body) 40%, var(--tv-body-dark) 100%);
+    border-radius: 20px 20px 10px 10px;
+    box-shadow:
+      0 8px 40px rgba(0,0,0,0.8),
+      inset 0 2px 0 rgba(255,255,255,0.08),
+      inset 0 -2px 0 rgba(0,0,0,0.3);
+    display: grid;
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr auto;
+    padding: 20px 20px 0 20px;
+    overflow: hidden;
+  }
+
+  @media (max-width: 600px) {
+    .tv { padding: 12px 12px 0 12px; border-radius: 14px 14px 8px 8px; width: 98vw; }
+    .antenna { display: none; }
+    .tv-legs { display: none; }
+  }
+
+  .screen-bezel {
+    position: relative;
+    background: var(--tv-bezel);
+    border-radius: 12px;
+    padding: 8px;
+    box-shadow: inset 0 2px 8px rgba(0,0,0,0.9), inset 0 0 2px rgba(0,0,0,1);
+    overflow: hidden;
+    aspect-ratio: 16 / 9;
+  }
+
+  .screen {
+    position: relative;
+    width: 100%; height: 100%;
+    border-radius: 6px;
+    overflow: hidden;
+    background: #000800;
+  }
+
+  .screen video {
+    width: 100%; height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  .screen::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: repeating-linear-gradient(0deg, transparent 0px, transparent 2px, rgba(0,0,0,0.15) 2px, rgba(0,0,0,0.15) 4px);
+    pointer-events: none;
+    z-index: 4;
+  }
+
+  .screen::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at center, transparent 60%, rgba(0,0,0,0.5) 100%);
+    pointer-events: none;
+    z-index: 5;
+    border-radius: 6px;
+  }
+
+  .screen-glare {
+    position: absolute;
+    top: 8%; left: 12%;
+    width: 50%; height: 30%;
+    background: radial-gradient(ellipse at center, rgba(255,255,255,0.06) 0%, transparent 70%);
+    transform: rotate(-8deg);
+    pointer-events: none;
+    z-index: 6;
+  }
+
+  @keyframes flicker {
+    0% { opacity: 0.97; } 5% { opacity: 1; } 10% { opacity: 0.98; }
+    15% { opacity: 1; } 50% { opacity: 0.99; } 80% { opacity: 1; }
+    90% { opacity: 0.98; } 100% { opacity: 0.97; }
+  }
+  .screen video { animation: flicker 0.15s infinite; }
+
+  .static-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 10;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.05s;
+    background: #111;
+  }
+  .static-overlay.active { opacity: 1; }
+  .static-overlay canvas { width: 100%; height: 100%; }
+
+  @keyframes channel-flash {
+    0% { opacity: 1; background: #fff; }
+    30% { opacity: 0.8; background: #a0ffa0; }
+    100% { opacity: 0; background: transparent; }
+  }
+  .screen-flash {
+    position: absolute; inset: 0; z-index: 8;
+    pointer-events: none; opacity: 0;
+  }
+  .screen-flash.active { animation: channel-flash 0.2s ease-out forwards; }
+
+  .channel-overlay {
+    position: absolute;
+    top: 20px; right: 24px;
+    z-index: 7;
+    text-align: right;
+    opacity: 0;
+    transition: opacity 0.3s;
+    pointer-events: none;
+  }
+  .channel-overlay.visible { opacity: 1; }
+  .channel-number {
+    font-family: 'Press Start 2P', monospace;
+    font-size: clamp(12px, 2vw, 20px);
+    color: #fff;
+    text-shadow: 0 0 10px var(--phosphor), 0 0 20px var(--phosphor), 2px 2px 0 rgba(0,0,0,0.8);
+    letter-spacing: 4px;
+  }
+  .channel-title {
+    font-family: 'VT323', monospace;
+    font-size: clamp(14px, 2vw, 22px);
+    color: #ddd;
+    text-shadow: 0 0 8px var(--phosphor), 1px 1px 0 #000;
+    margin-top: 4px;
+    max-width: 400px;
+    text-decoration: none;
+    pointer-events: auto;
+    display: block;
+    cursor: pointer;
+  }
+  .channel-title:hover {
+    color: #fff;
+    text-decoration: underline;
+  }
+
+  .standby {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    z-index: 3;
+    background: #000a00;
+  }
+  .standby.hidden { display: none; }
+  .standby-text {
+    font-family: 'Press Start 2P', monospace;
+    font-size: clamp(10px, 2.2vw, 18px);
+    color: var(--phosphor);
+    text-shadow: 0 0 15px var(--phosphor), 0 0 30px rgba(100,200,100,0.3);
+    text-align: center; line-height: 2.2;
+    animation: standby-pulse 3s ease-in-out infinite;
+  }
+  @keyframes standby-pulse { 0%, 100% { opacity: 0.8; } 50% { opacity: 1; } }
+  .standby-subtitle {
+    font-family: 'VT323', monospace;
+    font-size: clamp(14px, 2.5vw, 24px);
+    color: rgba(160, 216, 160, 0.6);
+    margin-top: 24px;
+    text-shadow: 0 0 8px rgba(100,200,100,0.3);
+  }
+
+  .tv-controls {
+    display: flex; flex-direction: row; align-items: center; justify-content: center;
+    padding: 12px 16px; gap: 24px;
+  }
+
+  .tv-brand {
+    font-family: 'Press Start 2P', monospace;
+    font-size: 7px;
+    color: rgba(180, 165, 140, 0.7);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    text-align: center; line-height: 1.6;
+  }
+
+  .dial-housing { position: relative; width: 48px; height: 48px; }
+  .dial-ring {
+    position: absolute; inset: 0; border-radius: 50%;
+    background: linear-gradient(145deg, #555, #222);
+    box-shadow: inset 0 2px 4px rgba(0,0,0,0.8), 0 1px 0 rgba(255,255,255,0.1);
+  }
+  .dial {
+    position: absolute; inset: 4px; border-radius: 50%;
+    background: linear-gradient(145deg, #888, #444);
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.2);
+    transition: transform 0.15s;
+    user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent;
+  }
+  .dial:active { transform: rotate(30deg); }
+  .dial::after {
+    content: ''; width: 3px; height: 16px;
+    background: #222; border-radius: 2px;
+    position: absolute; top: 8px;
+  }
+
+  .power-led {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #330000;
+    box-shadow: inset 0 1px 2px rgba(0,0,0,0.5);
+    transition: all 0.3s;
+  }
+  .power-led.on {
+    background: #00ff00;
+    box-shadow: 0 0 4px #00ff00, 0 0 10px rgba(0,255,0,0.4);
+  }
+
+  .speaker {
+    width: 120px; height: 28px;
+    background: repeating-linear-gradient(90deg, var(--tv-body-dark) 0px, var(--tv-body-dark) 2px, var(--tv-body) 2px, var(--tv-body) 5px);
+    border-radius: 4px;
+    box-shadow: inset 0 2px 6px rgba(0,0,0,0.6);
+  }
+
+  .tv-legs { display: flex; justify-content: center; gap: 500px; }
+  .tv-leg {
+    width: 16px; height: 28px;
+    background: linear-gradient(to bottom, var(--tv-body-dark), #111);
+    border-radius: 0 0 4px 4px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.5);
+  }
+
+  @media (max-width: 600px) {
+    .speaker { width: 60px; }
+    .dial-housing { width: 40px; height: 40px; }
+    .tv-brand { font-size: 6px; }
+    .tv-controls { gap: 12px; padding: 8px; }
+  }
+
+  .screen video { filter: contrast(1.1) saturate(0.9) brightness(1.05); }
+
+  .loading-indicator {
+    position: absolute;
+    bottom: 16px; left: 50%; transform: translateX(-50%);
+    z-index: 7;
+    font-family: 'VT323', monospace; font-size: 18px;
+    color: var(--phosphor);
+    text-shadow: 0 0 8px var(--phosphor);
+    opacity: 0; transition: opacity 0.3s;
+    pointer-events: none;
+  }
+  .loading-indicator.visible { opacity: 1; }
+
+  /* Muted indicator — shows while audio is loading */
+  .muted-indicator {
+    position: absolute;
+    bottom: 16px; left: 16px;
+    z-index: 7;
+    font-family: 'VT323', monospace;
+    font-size: 20px;
+    color: rgba(255, 255, 255, 0.6);
+    text-shadow: 0 0 6px rgba(0,0,0,0.8);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.5s;
+  }
+  .muted-indicator.visible { opacity: 1; }
+  .muted-indicator.fade-out { opacity: 0; transition: opacity 1.5s; }
+</style>
+</head>
+<body>
+
+<div class="tv-wrapper">
+  <div class="antenna">
+  </div>
+
+  <div class="tv">
+    <div class="screen-bezel">
+      <div class="screen" id="screen">
+        <video id="video" playsinline muted></video>
+        <audio id="audio" preload="none"></audio>
+        <div class="screen-glare"></div>
+        <div class="static-overlay" id="static"><canvas id="staticCanvas"></canvas></div>
+        <div class="screen-flash" id="flash"></div>
+        <div class="channel-overlay" id="channelOverlay">
+          <div class="channel-number" id="channelNumber">CH 00</div>
+          <a class="channel-title" id="channelTitle" target="_blank" rel="noopener"></a>
+        </div>
+        <div class="loading-indicator" id="loadingIndicator">TUNING...</div>
+        <div class="muted-indicator" id="mutedIndicator">LOADING SOUND ///</div>
+        <div class="standby" id="standby">
+          <div class="standby-text">ATmosphereConf<br>2026</div>
+          <div class="standby-subtitle">turn the dial to start</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tv-controls">
+      <div class="tv-brand">ATMO<br>SPHERE</div>
+      <div class="dial-housing">
+        <div class="dial-ring"></div>
+        <div class="dial" id="channelDial" role="button" aria-label="Change channel" tabindex="0"></div>
+      </div>
+      <div class="power-led" id="led"></div>
+      <div class="speaker"></div>
+    </div>
+  </div>
+
+  <div class="tv-legs">
+    <div class="tv-leg"></div>
+    <div class="tv-leg"></div>
+  </div>
+</div>
+
+<script>
+(function() {
+  'use strict';
+
+  const PDS = 'https://iameli.com';
+  const REPO = 'did:plc:rbvrr34edl5ddpuwcubjiost';
+  const COLLECTION = 'place.stream.video';
+  const PLAYBACK = 'https://vod-beta.stream.place/xrpc';
+
+  const video = document.getElementById('video');
+  const audioEl = document.getElementById('audio');
+  const dial = document.getElementById('channelDial');
+  const led = document.getElementById('led');
+  const standby = document.getElementById('standby');
+  const staticOverlay = document.getElementById('static');
+  const staticCanvas = document.getElementById('staticCanvas');
+  const flash = document.getElementById('flash');
+  const channelOverlay = document.getElementById('channelOverlay');
+  const channelNumber = document.getElementById('channelNumber');
+  const channelTitle = document.getElementById('channelTitle');
+  const loadingIndicator = document.getElementById('loadingIndicator');
+  const mutedIndicator = document.getElementById('mutedIndicator');
+
+  // -----------------------------------------------------------------------
+  // Playback architecture notes:
+  //
+  // The Streamplace VOD API serves each recording as a single large MP4 blob
+  // (often 1-2GB), with an HLS playlist that maps byte-range segments into it.
+  // Video is split into ~2-3s segments; audio is a SINGLE segment covering
+  // the entire talk duration (10-30MB).
+  //
+  // We can't use hls.js because:
+  //  1. hls.js's startPosition / startLoad() don't reliably seek into
+  //     byte-range playlists — it often loads from segment 0 regardless.
+  //  2. The single-segment audio track blocks MSE playback until the entire
+  //     audio chunk is downloaded, so video won't render until audio is ready.
+  //
+  // We can't rely on HTTP Range requests because:
+  //  The CDN (Cloudflare) intermittently ignores Range headers and returns
+  //  the full blob (status 200 instead of 206). This seems to depend on
+  //  edge cache state — some videos work, others don't.
+  //
+  // So instead we: parse the m3u8 ourselves, compute the target segment for
+  // a random seek position, fetch just that segment's bytes via Range, and
+  // feed it directly to MSE. If Range fails (200 instead of 206), we abort
+  // and try a different video — this fits the channel-surfing metaphor.
+  //
+  // Audio is loaded separately in the background: fetch the single audio
+  // segment, wrap it in a blob URL, and play it in a synced <audio> element.
+  // MSE can't be used for audio because the segment often exceeds the
+  // browser's source buffer quota. The blob must use type "video/mp4" (not
+  // "audio/mp4") for the browser to recognise the fMP4 container.
+  // -----------------------------------------------------------------------
+
+  let vods = [];
+  let currentChannel = -1;
+  let gen = 0;
+  let overlayTimeout = null;
+  let switching = false;
+  let staticCtx = staticCanvas.getContext('2d');
+  let staticAnimFrame = null;
+
+  async function fetchVods() {
+    let all = [];
+    let cursor;
+    do {
+      const p = new URLSearchParams({ repo: REPO, collection: COLLECTION, limit: '100' });
+      if (cursor) p.set('cursor', cursor);
+      const data = await (await fetch(`${PDS}/xrpc/com.atproto.repo.listRecords?${p}`)).json();
+      all = all.concat(data.records || []);
+      cursor = data.cursor;
+    } while (cursor);
+
+    // Filter out denied VODs (ones known to not support Range requests)
+    try {
+      const text = await (await fetch('/denied-vods.json')).text();
+      const denied = JSON.parse(text.replace(/\/\/.*$/gm, ''));
+      const denySet = new Set(denied);
+      const before = all.length;
+      all = all.filter(r => !denySet.has(r.uri));
+      if (before !== all.length) console.log(`[TV] Filtered out ${before - all.length} denied VODs`);
+    } catch (e) {
+      // No deny list — that's fine, use all VODs
+    }
+
+    return all;
+  }
+
+  // --- Parse HLS playlist ---
+  function parsePlaylist(text) {
+    const lines = text.split('\n');
+    let initUri = null;
+    const segments = [];
+    let dur = 0, off = 0, len = 0;
+    for (const line of lines) {
+      const l = line.trim();
+      if (l.startsWith('#EXT-X-MAP:')) {
+        const m = l.match(/URI="([^"]+)"/);
+        if (m) initUri = m[1];
+      } else if (l.startsWith('#EXTINF:')) {
+        dur = parseFloat(l.split(':')[1]);
+      } else if (l.startsWith('#EXT-X-BYTERANGE:')) {
+        const parts = l.split(':')[1].split('@');
+        len = parseInt(parts[0]);
+        if (parts[1] !== undefined) off = parseInt(parts[1]);
+      } else if (l && !l.startsWith('#')) {
+        segments.push({ uri: l, duration: dur, offset: off, length: len });
+        off += len;
+      }
+    }
+    return { initUri, segments };
+  }
+
+  function segmentAt(segments, time) {
+    let t = 0;
+    for (let i = 0; i < segments.length; i++) {
+      t += segments[i].duration;
+      if (t > time) return i;
+    }
+    return segments.length - 1;
+  }
+
+  function segmentTime(segments, idx) {
+    let t = 0;
+    for (let i = 0; i < idx; i++) t += segments[i].duration;
+    return t;
+  }
+
+  function resolveUrl(relative) {
+    return `${PLAYBACK}/${relative}`;
+  }
+
+  // Fetch a byte range from the blob. Throws RANGE_NOT_SUPPORTED if the CDN
+  // returns the full file (see architecture notes above).
+  async function fetchRange(url, offset, length, signal) {
+    const end = offset + length - 1;
+    const res = await fetch(url, {
+      headers: { Range: `bytes=${offset}-${end}` },
+      cache: 'no-store',
+      signal,
+    });
+    if (res.status === 200) {
+      res.body?.cancel();
+      throw new Error('RANGE_NOT_SUPPORTED');
+    }
+    if (res.status !== 206) throw new Error(`HTTP ${res.status}`);
+    return res.arrayBuffer();
+  }
+
+  // --- Static noise ---
+  function drawStatic() {
+    const w = staticCanvas.width = (staticCanvas.offsetWidth / 2) || 160;
+    const h = staticCanvas.height = (staticCanvas.offsetHeight / 2) || 90;
+    const img = staticCtx.createImageData(w, h);
+    const d = img.data;
+    for (let i = 0; i < d.length; i += 4) {
+      const v = Math.random() * 255;
+      d[i] = d[i+1] = d[i+2] = v;
+      d[i+3] = 255;
+    }
+    staticCtx.putImageData(img, 0, 0);
+    staticAnimFrame = requestAnimationFrame(drawStatic);
+  }
+  function startStatic() {
+    staticOverlay.classList.add('active');
+    if (!staticAnimFrame) drawStatic();
+  }
+  function stopStatic() {
+    staticOverlay.classList.remove('active');
+    if (staticAnimFrame) { cancelAnimationFrame(staticAnimFrame); staticAnimFrame = null; }
+  }
+
+  function showChannelInfo(ch, title, uri) {
+    channelNumber.textContent = 'CH ' + String(ch).padStart(2, '0');
+    channelTitle.textContent = title;
+    channelTitle.href = 'https://pds.ls/' + uri;
+    channelOverlay.classList.add('visible');
+    clearTimeout(overlayTimeout);
+  }
+
+  // --- Channel change: pick a random VOD, seek to a random point ---
+  async function changeChannel() {
+    if (switching || vods.length === 0) return;
+    switching = true;
+    const myGen = ++gen;
+    const stale = () => myGen !== gen;
+
+    // Pick random VOD
+    let idx;
+    do { idx = Math.floor(Math.random() * vods.length); }
+    while (vods.length > 1 && idx === currentChannel);
+    currentChannel = idx;
+
+    const record = vods[idx];
+    const title = record.value.title || 'Unknown Programme';
+    const durationSec = (record.value.duration || 0) / 1e9;
+    const uri = record.uri;
+    const encodedUri = encodeURIComponent(uri);
+
+    console.log('[TV] Switching to:', title, `(${Math.round(durationSec)}s)`);
+
+    // Visual: flash + static
+    flash.classList.remove('active');
+    void flash.offsetWidth;
+    flash.classList.add('active');
+    startStatic();
+    standby.classList.add('hidden');
+    led.classList.add('on');
+    loadingIndicator.classList.add('visible');
+    mutedIndicator.classList.remove('visible', 'fade-out');
+    showChannelInfo(idx + 1, title, uri);
+
+    // Kill previous playback
+    video.pause(); video.removeAttribute('src'); video.load();
+    audioEl.pause(); audioEl.removeAttribute('src');
+
+    await new Promise(r => setTimeout(r, 250));
+    if (stale()) { switching = false; return; }
+
+    const randomStart = durationSec > 30 ? Math.random() * durationSec * 0.8 : 0;
+    console.log('[TV] Target time:', Math.round(randomStart) + 's');
+
+    try {
+      // Fetch video-only playlist (track=1). We avoid the master playlist because
+      // it includes the audio track, which would block playback (see notes above).
+      const videoPlaylistUrl = `${PLAYBACK}/place.stream.playback.getVideoPlaylist?uri=${encodedUri}&track=1`;
+      const plText = await (await fetch(videoPlaylistUrl)).text();
+      if (stale()) { switching = false; return; }
+      const pl = parsePlaylist(plText);
+
+      const segIdx = segmentAt(pl.segments, randomStart);
+      const seg = pl.segments[segIdx];
+      const segStartTime = segmentTime(pl.segments, segIdx);
+      const blobUrl = resolveUrl(seg.uri);
+      const initUrl = resolveUrl(pl.initUri);
+
+      console.log(`[TV] Segment ${segIdx}: ${seg.offset}-${seg.offset + seg.length} (${(seg.length/1024/1024).toFixed(1)}MB) at ${segStartTime.toFixed(1)}s`);
+
+      // Fetch init (~1KB) + one video segment (~3MB) — all we need to start
+      const [initBuf, segBuf] = await Promise.all([
+        fetch(initUrl, { cache: 'no-store' }).then(r => r.arrayBuffer()),
+        fetchRange(blobUrl, seg.offset, seg.length, null),
+      ]);
+      if (stale()) { switching = false; return; }
+
+      console.log('[TV] Init + first segment fetched');
+
+      const ms = new MediaSource();
+      video.src = URL.createObjectURL(ms);
+      await new Promise(r => ms.addEventListener('sourceopen', r, { once: true }));
+      if (stale()) { switching = false; return; }
+
+      const codec = 'video/mp4; codecs="avc1.42c01f"';
+      const sb = ms.addSourceBuffer(codec);
+
+      sb.appendBuffer(initBuf);
+      await new Promise(r => sb.addEventListener('updateend', r, { once: true }));
+
+      // Offset timestamps so the segment plays from time=0 in the video element
+      sb.timestampOffset = -segStartTime;
+
+      sb.appendBuffer(segBuf);
+      await new Promise(r => sb.addEventListener('updateend', r, { once: true }));
+      if (stale()) { switching = false; return; }
+
+      console.log('[TV] Buffer ready, playing');
+
+      video.muted = true;
+      await video.play();
+      stopStatic();
+      loadingIndicator.classList.remove('visible');
+      mutedIndicator.classList.remove('fade-out');
+      mutedIndicator.classList.add('visible');
+      console.log('[TV] Playing!');
+
+      // Buffer ahead in the background (lazy — only when buffer drops below 20s)
+      (async () => {
+        for (let i = segIdx + 1; i < pl.segments.length && i < segIdx + 60; i++) {
+          if (stale()) return;
+          // Wait if we have plenty buffered
+          while (video.buffered.length > 0 &&
+                 video.buffered.end(0) - video.currentTime > 20) {
+            await new Promise(r => setTimeout(r, 2000));
+            if (stale()) return;
+          }
+          const s = pl.segments[i];
+          try {
+            const buf = await fetchRange(resolveUrl(s.uri), s.offset, s.length);
+            if (stale()) return;
+            if (sb.updating) await new Promise(r => sb.addEventListener('updateend', r, { once: true }));
+            sb.appendBuffer(buf);
+            await new Promise(r => sb.addEventListener('updateend', r, { once: true }));
+          } catch (e) {
+            console.warn('[TV] Segment error:', e);
+            break;
+          }
+        }
+      })();
+
+      // Load audio in background. Audio is a separate <audio> element synced to
+      // the video because it can't share the video's MediaSource (see notes).
+      const audioSegStartTime = segStartTime;
+      (async () => {
+        try {
+          const audioPlaylistUrl = `${PLAYBACK}/place.stream.playback.getVideoPlaylist?uri=${encodedUri}&track=2`;
+          const audioText = await (await fetch(audioPlaylistUrl)).text();
+          if (stale()) return;
+          const audioPl = parsePlaylist(audioText);
+          if (!audioPl.segments.length) return;
+          const audioSeg = audioPl.segments[0];
+          const audioInitUrl = resolveUrl(audioPl.initUri);
+          const audioBlobUrl = resolveUrl(audioSeg.uri);
+
+          console.log(`[TV] Loading audio: ${(audioSeg.length/1024/1024).toFixed(1)}MB at offset ${audioSeg.offset}`);
+
+          const audioInit = await fetch(audioInitUrl, { cache: 'no-store' }).then(r => r.arrayBuffer());
+          if (stale()) return;
+
+          let audioData;
+          const end = audioSeg.offset + audioSeg.length - 1;
+          const rangeRes = await fetch(audioBlobUrl, {
+            headers: { Range: `bytes=${audioSeg.offset}-${end}` },
+            cache: 'no-store',
+          });
+          if (rangeRes.status === 206) {
+            console.log('[TV] Audio: range worked');
+            audioData = await rangeRes.arrayBuffer();
+          } else {
+            console.log('[TV] Audio: downloading full blob to slice...');
+            const full = await rangeRes.arrayBuffer();
+            if (stale()) return;
+            audioData = full.slice(audioSeg.offset, audioSeg.offset + audioSeg.length);
+          }
+          if (stale()) return;
+
+          console.log(`[TV] Audio data: ${(audioData.byteLength/1024/1024).toFixed(1)}MB, creating blob`);
+
+          // Blob must be "video/mp4" not "audio/mp4" — browsers need the full
+          // fMP4 container type to parse the init segment's moov atom correctly.
+          const blob = new Blob([audioInit, audioData], { type: 'video/mp4' });
+          audioEl.src = URL.createObjectURL(blob);
+
+          // Wait for browser to parse the fMP4. Neither loadedmetadata nor canplay
+          // fires reliably for all fMP4 blobs, so we also use a 3s timeout.
+          await new Promise((resolve, reject) => {
+            const onReady = () => { cleanup(); resolve(); };
+            const onError = () => { cleanup(); reject(audioEl.error); };
+            const cleanup = () => {
+              audioEl.removeEventListener('loadedmetadata', onReady);
+              audioEl.removeEventListener('canplay', onReady);
+              audioEl.removeEventListener('error', onError);
+            };
+            audioEl.addEventListener('loadedmetadata', onReady, { once: true });
+            audioEl.addEventListener('canplay', onReady, { once: true });
+            audioEl.addEventListener('error', onError, { once: true });
+            setTimeout(resolve, 3000);
+          });
+          if (stale()) return;
+
+          console.log('[TV] Audio loaded, readyState=' + audioEl.readyState, 'duration=' + audioEl.duration);
+          audioEl.currentTime = audioSegStartTime + video.currentTime;
+          console.log('[TV] Audio seeking to', audioEl.currentTime.toFixed(1) + 's');
+
+          // Fade audio in over 1.5s — less jarring than a hard cut
+          audioEl.volume = 0;
+          audioEl.play().catch(e => console.warn('[TV] Audio play failed:', e));
+          const fadeStart = performance.now();
+          const fadeDuration = 1500;
+          (function fadeIn() {
+            const elapsed = performance.now() - fadeStart;
+            audioEl.volume = Math.min(1, elapsed / fadeDuration);
+            if (elapsed < fadeDuration) requestAnimationFrame(fadeIn);
+          })();
+
+          // Hide muted indicator
+          mutedIndicator.classList.add('fade-out');
+          mutedIndicator.classList.remove('visible');
+        } catch (e) {
+          console.warn('[TV] Audio load failed (non-fatal):', e);
+        }
+      })();
+
+      // Keep audio synced to video via RAF (~60fps instead of ~4fps timeupdate)
+      (function syncLoop() {
+        if (stale()) return;
+        if (audioEl.readyState >= 2 && !audioEl.paused && !video.paused) {
+          const expected = audioSegStartTime + video.currentTime;
+          const drift = audioEl.currentTime - expected;
+          if (Math.abs(drift) > 0.5) {
+            // Large drift — hard seek
+            audioEl.currentTime = expected;
+            audioEl.playbackRate = 1;
+          } else if (Math.abs(drift) > 0.05) {
+            // Small drift — nudge playback rate to catch up/slow down
+            audioEl.playbackRate = drift > 0 ? 0.97 : 1.03;
+          } else {
+            audioEl.playbackRate = 1;
+          }
+        }
+        requestAnimationFrame(syncLoop);
+      })();
+
+    } catch (e) {
+      if (e.message === 'RANGE_NOT_SUPPORTED') {
+        console.warn('[TV] Range not supported for this video, trying another...');
+        switching = false;
+        changeChannel();
+        return;
+      }
+      console.warn('[TV] Playback error:', e);
+      stopStatic();
+      loadingIndicator.classList.remove('visible');
+    }
+
+    switching = false;
+  }
+
+  // --- Events ---
+  dial.addEventListener('click', changeChannel);
+  dial.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); changeChannel(); }
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === ' ' || e.key === 'Enter' || e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+      e.preventDefault();
+      changeChannel();
+    }
+  });
+
+  // --- Init ---
+  (async () => {
+    try {
+      vods = await fetchVods();
+      console.log(`Loaded ${vods.length} VODs`);
+    } catch (e) {
+      console.error('Failed to load VODs:', e);
+    }
+  })();
+})();
+</script>
+
+</body>
+</html>
