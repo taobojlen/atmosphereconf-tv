@@ -345,6 +345,31 @@
     margin-top: 8px;
   }
   .source-link:hover { color: rgba(255, 255, 255, 0.5); }
+
+  .safari-warning {
+    display: none;
+    position: fixed;
+    bottom: 24px; left: 50%; transform: translateX(-50%);
+    z-index: 100;
+    background: rgba(30, 26, 20, 0.95);
+    border: 1px solid rgba(160, 216, 160, 0.3);
+    border-radius: 8px;
+    padding: 12px 20px;
+    font-family: 'VT323', monospace;
+    font-size: 18px;
+    color: var(--phosphor);
+    text-shadow: 0 0 6px rgba(100, 200, 100, 0.3);
+    text-align: center;
+    max-width: 90vw;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
+  }
+  .safari-warning.visible { display: block; }
+  .safari-warning-close {
+    background: none; border: none; color: var(--phosphor);
+    font-family: 'VT323', monospace; font-size: 18px;
+    cursor: pointer; margin-left: 12px; opacity: 0.6;
+  }
+  .safari-warning-close:hover { opacity: 1; }
 </style>
 </head>
 <body>
@@ -392,6 +417,25 @@
   <a class="source-link" href="https://github.com/taobojlen/atmosphereconf-tv" target="_blank" rel="noopener">source code</a>
 </div>
 
+<div class="safari-warning" id="safariWarning">
+  ⚠ Desktop Safari isn't supported yet — try Firefox or Chrome for the best experience
+  <button class="safari-warning-close" id="safariWarningClose" aria-label="Dismiss">✕</button>
+</div>
+
+<script>
+// Desktop Safari detection: Safari UA without mobile indicators
+(function() {
+  var ua = navigator.userAgent;
+  var isSafari = /Safari/.test(ua) && !/Chrome|Chromium|CriOS|FxiOS|EdgA|Edg/.test(ua);
+  var isMobile = /iPhone|iPad|iPod|Android/.test(ua) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(ua));
+  if (isSafari && !isMobile) {
+    document.getElementById('safariWarning').classList.add('visible');
+    document.getElementById('safariWarningClose').addEventListener('click', function() {
+      document.getElementById('safariWarning').classList.remove('visible');
+    });
+  }
+})();
+</script>
 <script src="https://cdn.jsdelivr.net/npm/hls.js@1"></script>
 <script>
 (function() {
