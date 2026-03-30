@@ -444,6 +444,61 @@
   let staticCtx = staticCanvas.getContext('2d');
   let staticAnimFrame = null;
 
+  // --- Static TV audio (white noise via Web Audio API) ---
+  let staticAudioCtx = null;
+  let staticNoiseNode = null;
+  let staticGainNode = null;
+
+  function startStaticAudio() {
+    try {
+      if (!staticAudioCtx) {
+        staticAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (staticAudioCtx.state === 'suspended') staticAudioCtx.resume();
+      if (staticNoiseNode) return; // already playing
+
+      // Create white noise buffer (1 second, looped)
+      const bufferSize = staticAudioCtx.sampleRate;
+      const noiseBuffer = staticAudioCtx.createBuffer(1, bufferSize, staticAudioCtx.sampleRate);
+      const data = noiseBuffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        data[i] = Math.random() * 2 - 1;
+      }
+
+      staticNoiseNode = staticAudioCtx.createBufferSource();
+      staticNoiseNode.buffer = noiseBuffer;
+      staticNoiseNode.loop = true;
+
+      staticGainNode = staticAudioCtx.createGain();
+      staticGainNode.gain.value = 0.015; // barely there
+
+      staticNoiseNode.connect(staticGainNode);
+      staticGainNode.connect(staticAudioCtx.destination);
+      staticNoiseNode.start();
+    } catch (e) {
+      // Audio context not available — fine, just skip
+    }
+  }
+
+  function stopStaticAudio() {
+    if (staticNoiseNode) {
+      try {
+        // Quick fade out to avoid click
+        if (staticGainNode) {
+          staticGainNode.gain.setTargetAtTime(0, staticAudioCtx.currentTime, 0.02);
+        }
+        setTimeout(() => {
+          try { staticNoiseNode.stop(); } catch (e) {}
+          staticNoiseNode = null;
+          staticGainNode = null;
+        }, 80);
+      } catch (e) {
+        staticNoiseNode = null;
+        staticGainNode = null;
+      }
+    }
+  }
+
   async function fetchVods() {
     let all = [];
     let cursor;
@@ -548,10 +603,12 @@
   function startStatic() {
     staticOverlay.classList.add('active');
     if (!staticAnimFrame) drawStatic();
+    startStaticAudio();
   }
   function stopStatic() {
     staticOverlay.classList.remove('active');
     if (staticAnimFrame) { cancelAnimationFrame(staticAnimFrame); staticAnimFrame = null; }
+    stopStaticAudio();
   }
 
   function showChannelInfo(ch, title, uri) {
