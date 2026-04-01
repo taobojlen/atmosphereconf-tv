@@ -328,22 +328,6 @@
   }
   .loading-indicator.visible { opacity: 1; }
 
-  /* Muted indicator */
-  .muted-indicator {
-    position: absolute;
-    bottom: 16px; left: 16px;
-    z-index: 7;
-    font-family: 'VT323', monospace;
-    font-size: 20px;
-    color: rgba(255, 255, 255, 0.6);
-    text-shadow: 0 0 6px rgba(0,0,0,0.8);
-    pointer-events: none;
-    opacity: 0;
-    transition: opacity 0.5s;
-  }
-  .muted-indicator.visible { opacity: 1; }
-  .muted-indicator.fade-out { opacity: 0; transition: opacity 1.5s; }
-
   .source-link {
     font-family: 'VT323', monospace;
     font-size: 14px;
@@ -353,30 +337,6 @@
   }
   .source-link:hover { color: rgba(255, 255, 255, 0.5); }
 
-  .safari-warning {
-    display: none;
-    position: fixed;
-    bottom: 24px; left: 50%; transform: translateX(-50%);
-    z-index: 100;
-    background: rgba(30, 26, 20, 0.95);
-    border: 1px solid rgba(160, 216, 160, 0.3);
-    border-radius: 8px;
-    padding: 12px 20px;
-    font-family: 'VT323', monospace;
-    font-size: 18px;
-    color: var(--phosphor);
-    text-shadow: 0 0 6px rgba(100, 200, 100, 0.3);
-    text-align: center;
-    max-width: 90vw;
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.6);
-  }
-  .safari-warning.visible { display: block; }
-  .safari-warning-close {
-    background: none; border: none; color: var(--phosphor);
-    font-family: 'VT323', monospace; font-size: 18px;
-    cursor: pointer; margin-left: 12px; opacity: 0.6;
-  }
-  .safari-warning-close:hover { opacity: 1; }
 </style>
 </head>
 <body>
@@ -389,7 +349,6 @@
     <div class="screen-bezel">
       <div class="screen" id="screen">
         <video id="video" playsinline></video>
-        <audio id="audio" preload="none"></audio>
         <div class="screen-glare"></div>
         <div class="static-overlay" id="static"><canvas id="staticCanvas"></canvas></div>
         <div class="screen-flash" id="flash"></div>
@@ -398,7 +357,6 @@
           <a class="channel-title" id="channelTitle" target="_blank" rel="noopener"></a>
         </div>
         <div class="loading-indicator" id="loadingIndicator">TUNING...</div>
-        <div class="muted-indicator" id="mutedIndicator">LOADING SOUND ///</div>
         <div class="standby" id="standby">
           <div class="standby-text">ATmosphereConf<br>2026</div>
           <div class="standby-subtitle">turn the dial to start</div>
@@ -424,26 +382,7 @@
   <a class="source-link" href="https://tangled.org/btao.org/atmosphereconf-tv" target="_blank" rel="noopener">source code</a>
 </div>
 
-<div class="safari-warning" id="safariWarning">
-  ⚠ Desktop Safari isn't supported yet — try Firefox or Chrome for the best experience
-  <button class="safari-warning-close" id="safariWarningClose" aria-label="Dismiss">✕</button>
-</div>
-
-<script>
-// Desktop Safari detection: Safari UA without mobile indicators
-(function() {
-  var ua = navigator.userAgent;
-  var isSafari = /Safari/.test(ua) && !/Chrome|Chromium|CriOS|FxiOS|EdgA|Edg/.test(ua);
-  var isMobile = /iPhone|iPad|iPod|Android/.test(ua) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(ua));
-  if (isSafari && !isMobile) {
-    document.getElementById('safariWarning').classList.add('visible');
-    document.getElementById('safariWarningClose').addEventListener('click', function() {
-      document.getElementById('safariWarning').classList.remove('visible');
-    });
-  }
-})();
-</script>
-<script src="https://cdn.jsdelivr.net/npm/hls.js@1"></script>
+<script src="https://cdn.jsdelivr.net/npm/shaka-player/dist/shaka-player.compiled.js"></script>
 <script>
 (function() {
   'use strict';
@@ -454,7 +393,6 @@
   const PLAYBACK = 'https://vod-beta.stream.place/xrpc';
 
   const video = document.getElementById('video');
-  const audioEl = document.getElementById('audio');
   const dial = document.getElementById('channelDial');
   const led = document.getElementById('led');
   const standby = document.getElementById('standby');
@@ -465,14 +403,13 @@
   const channelNumber = document.getElementById('channelNumber');
   const channelTitle = document.getElementById('channelTitle');
   const loadingIndicator = document.getElementById('loadingIndicator');
-  const mutedIndicator = document.getElementById('mutedIndicator');
 
   let vods = [];
   let currentChannel = -1;
   let gen = 0;
   let overlayTimeout = null;
   let switching = false;
-  let hls = null;
+  let player = null;
   let staticCtx = staticCanvas.getContext('2d');
   let staticAnimFrame = null;
 
@@ -546,35 +483,6 @@
     return all;
   }
 
-  // --- Parse HLS playlist (for audio track only) ---
-  function parsePlaylist(text) {
-    const lines = text.split('\n');
-    let initUri = null;
-    const segments = [];
-    let dur = 0, off = 0, len = 0;
-    for (const line of lines) {
-      const l = line.trim();
-      if (l.startsWith('#EXT-X-MAP:')) {
-        const m = l.match(/URI="([^"]+)"/);
-        if (m) initUri = m[1];
-      } else if (l.startsWith('#EXTINF:')) {
-        dur = parseFloat(l.split(':')[1]);
-      } else if (l.startsWith('#EXT-X-BYTERANGE:')) {
-        const parts = l.split(':')[1].split('@');
-        len = parseInt(parts[0]);
-        if (parts[1] !== undefined) off = parseInt(parts[1]);
-      } else if (l && !l.startsWith('#')) {
-        segments.push({ uri: l, duration: dur, offset: off, length: len });
-        off += len;
-      }
-    }
-    return { initUri, segments };
-  }
-
-  function resolveUrl(relative) {
-    return `${PLAYBACK}/${relative}`;
-  }
-
   // --- Static noise ---
   function drawStatic() {
     const w = staticCanvas.width = (staticCanvas.offsetWidth / 2) || 160;
@@ -637,13 +545,14 @@
     standby.classList.add('hidden');
     led.classList.add('on');
     loadingIndicator.classList.add('visible');
-    mutedIndicator.classList.remove('visible', 'fade-out');
     showChannelInfo(idx + 1, title, uri);
 
     // Kill previous playback
-    if (hls) { hls.destroy(); hls = null; }
+    if (player) {
+      try { await player.destroy(); } catch (e) {}
+      player = null;
+    }
     video.pause(); video.removeAttribute('src'); video.load();
-    audioEl.pause(); audioEl.removeAttribute('src');
 
     await new Promise(r => setTimeout(r, 250));
     if (stale()) { switching = false; return; }
@@ -651,145 +560,77 @@
     const randomStart = durationSec > 30 ? Math.random() * durationSec * 0.8 : 0;
     console.log('[TV] Target time:', Math.round(randomStart) + 's');
 
-    // --- Video: hls.js on video-only playlist (track=1) for fast start ---
-    const videoOnlyUrl = `${PLAYBACK}/place.stream.playback.getVideoPlaylist?uri=${encodedUri}&track=1`;
+    const playlistUrl = `${PLAYBACK}/place.stream.playback.getVideoPlaylist?uri=${encodedUri}`;
 
-    if (!Hls.isSupported()) {
-      // Safari — native HLS with full playlist
-      const playlistUrl = `${PLAYBACK}/place.stream.playback.getVideoPlaylist?uri=${encodedUri}`;
+    if (!shaka.Player.isBrowserSupported()) {
+      // Safari / iOS — native HLS
       video.src = playlistUrl;
       video.currentTime = randomStart;
       try {
         await video.play();
-        stopStatic();
-        loadingIndicator.classList.remove('visible');
       } catch (e) {
         console.warn('[TV] Playback error:', e);
-        stopStatic();
-        loadingIndicator.classList.remove('visible');
       }
+      stopStatic();
+      loadingIndicator.classList.remove('visible');
       switching = false;
       return;
     }
 
-    hls = new Hls({
-      startPosition: randomStart,
-      maxBufferLength: 30,
-      maxMaxBufferLength: 60,
+    // Shaka Player instance
+    player = new shaka.Player();
+    await player.attach(video);
+
+    player.configure({
+      preferredAudioCodecs: ['mp4a.40.2'],
+      streaming: {
+        bufferingGoal: 30,
+        rebufferingGoal: 2,
+        bufferBehind: 10,
+      },
     });
 
-    hls.loadSource(videoOnlyUrl);
-    hls.attachMedia(video);
+    // Mute before loading so autoplay works regardless of gesture timing
+    video.muted = true;
 
-    // Play as soon as manifest is parsed
-    hls.on(Hls.Events.MANIFEST_PARSED, () => {
+    const onReady = () => {
+      video.removeEventListener('playing', onReady);
       if (stale()) return;
-      console.log('[TV] Video manifest parsed');
-      video.muted = true;
-      video.play().catch(e => console.warn('[TV] Play failed:', e));
-    });
-
-    // Hide static once actual frames are rendering
-    const onPlaying = () => {
-      if (stale()) return;
-      video.removeEventListener('playing', onPlaying);
-      console.log('[TV] Video playing!');
+      console.log('[TV] Playing!');
       stopStatic();
       loadingIndicator.classList.remove('visible');
-      mutedIndicator.classList.add('visible');
+      video.muted = false;
     };
-    video.addEventListener('playing', onPlaying);
+    video.addEventListener('playing', onReady);
 
-    hls.on(Hls.Events.ERROR, (event, data) => {
+    player.addEventListener('error', (event) => {
       if (stale()) return;
-      console.warn('[TV] HLS error:', data.type, data.details, data.fatal);
-      if (data.fatal) {
-        if (data.type === Hls.ErrorTypes.MEDIA_ERROR) {
-          hls.recoverMediaError();
-        } else {
-          hls.destroy(); hls = null;
-          switching = false;
-          changeChannel();
-        }
+      const error = event.detail;
+      console.warn('[TV] Shaka error:', error.code, error.message);
+      if (player) {
+        player.destroy().catch(() => {});
+        player = null;
       }
+      switching = false;
+      changeChannel();
     });
 
-    // --- Audio: fetch in background, sync to video ---
-    // The audio track is a single giant fMP4 segment. We fetch it separately
-    // and play it in a synced <audio> element so video isn't blocked.
-    (async () => {
-      try {
-        const audioPlaylistUrl = `${PLAYBACK}/place.stream.playback.getVideoPlaylist?uri=${encodedUri}&track=2`;
-        const audioText = await (await fetch(audioPlaylistUrl)).text();
-        if (stale()) return;
-        const audioPl = parsePlaylist(audioText);
-        if (!audioPl.segments.length) return;
-
-        const audioSeg = audioPl.segments[0];
-        const audioInitUrl = resolveUrl(audioPl.initUri);
-        const audioBlobUrl = resolveUrl(audioSeg.uri);
-
-        console.log(`[TV] Loading audio: ${(audioSeg.length/1024/1024).toFixed(1)}MB`);
-
-        const audioInit = await fetch(audioInitUrl, { cache: 'no-store' }).then(r => r.arrayBuffer());
-        if (stale()) return;
-
-        const end = audioSeg.offset + audioSeg.length - 1;
-        const rangeRes = await fetch(audioBlobUrl, {
-          headers: { Range: `bytes=${audioSeg.offset}-${end}` },
-          cache: 'no-store',
-        });
-
-        let audioData;
-        if (rangeRes.status === 206) {
-          audioData = await rangeRes.arrayBuffer();
-        } else {
-          const full = await rangeRes.arrayBuffer();
-          if (stale()) return;
-          audioData = full.slice(audioSeg.offset, audioSeg.offset + audioSeg.length);
-        }
-        if (stale()) return;
-
-        console.log(`[TV] Audio fetched: ${(audioData.byteLength/1024/1024).toFixed(1)}MB`);
-
-        const blob = new Blob([audioInit, audioData], { type: 'video/mp4' });
-        audioEl.src = URL.createObjectURL(blob);
-
-        // Wait for the browser to be ready enough to seek
-        await new Promise(r => {
-          if (audioEl.readyState >= 1) { r(); return; }
-          audioEl.addEventListener('loadedmetadata', r, { once: true });
-          audioEl.addEventListener('canplay', r, { once: true });
-          setTimeout(r, 1000);
-        });
-        if (stale()) return;
-
-        audioEl.currentTime = video.currentTime;
-        console.log('[TV] Audio seeking to', video.currentTime.toFixed(1) + 's');
-
-        await new Promise(r => {
-          if (!audioEl.seeking) { r(); return; }
-          audioEl.addEventListener('seeked', r, { once: true });
-          setTimeout(r, 2000);
-        });
-        if (stale()) return;
-
-        audioEl.volume = 0;
-        await audioEl.play();
-        const fadeStart = performance.now();
-        (function fadeIn() {
-          const t = Math.min(1, (performance.now() - fadeStart) / 1500);
-          audioEl.volume = t;
-          if (t < 1) requestAnimationFrame(fadeIn);
-        })();
-
-        mutedIndicator.classList.add('fade-out');
-        mutedIndicator.classList.remove('visible');
-        console.log('[TV] Audio playing!');
-      } catch (e) {
-        console.warn('[TV] Audio load failed (non-fatal):', e);
+    try {
+      await player.load(playlistUrl, randomStart);
+      if (stale()) return;
+      console.log('[TV] Loaded, seeking to', Math.round(randomStart) + 's');
+      await video.play();
+    } catch (e) {
+      if (stale()) return;
+      console.warn('[TV] Load/play error:', e);
+      if (player) {
+        player.destroy().catch(() => {});
+        player = null;
       }
-    })();
+      switching = false;
+      changeChannel();
+      return;
+    }
 
     switching = false;
   }
@@ -807,6 +648,7 @@
   });
 
   // --- Init ---
+  shaka.polyfill.installAll();
   (async () => {
     try {
       vods = await fetchVods();
