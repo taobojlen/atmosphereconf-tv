@@ -519,7 +519,8 @@
   function showChannelInfo(ch, title, uri) {
     channelNumber.textContent = 'CH ' + String(ch).padStart(2, '0');
     channelTitle.textContent = title;
-    channelTitle.href = 'https://pds.ls/' + uri;
+    const rkey = uri.split('/').pop();
+    channelTitle.href = 'https://sp-vod.pages.dev/stream.place/video/' + rkey;
     channelOverlay.classList.add('visible');
     clearTimeout(overlayTimeout);
   }
