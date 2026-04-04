@@ -1,2 +1,3 @@
 node_modules/
 test-range.log
+.wrangler
