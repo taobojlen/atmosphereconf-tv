@@ -418,8 +418,15 @@
   let overlayTimeout = null;
   let switching = false;
   let player = null;
+  let currentRkey = null;
   let staticCtx = staticCanvas.getContext('2d');
   let staticAnimFrame = null;
+
+  video.addEventListener('timeupdate', () => {
+    if (!currentRkey) return;
+    const t = Math.floor(video.currentTime || 0);
+    channelTitle.href = 'https://sp-vod.pages.dev/stream.place/video/' + currentRkey + '?t=' + t;
+  });
 
   // --- Static TV audio (white noise via Web Audio API) ---
   let staticAudioCtx = null;
@@ -519,8 +526,8 @@
   function showChannelInfo(ch, title, uri) {
     channelNumber.textContent = 'CH ' + String(ch).padStart(2, '0');
     channelTitle.textContent = title;
-    const rkey = uri.split('/').pop();
-    channelTitle.href = 'https://sp-vod.pages.dev/stream.place/video/' + rkey;
+    currentRkey = uri.split('/').pop();
+    channelTitle.href = 'https://sp-vod.pages.dev/stream.place/video/' + currentRkey;
     channelOverlay.classList.add('visible');
     clearTimeout(overlayTimeout);
   }
